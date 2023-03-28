@@ -10,34 +10,28 @@ const VITE_SUPABASE_URL = "https://xpnmkgqflujrxokagctc.supabase.co";
 
 const supabase = createClient(VITE_SUPABASE_URL, VITE_SUPABASE_KEY);
 
-const chatList = [
-  {
-    username: "Rohan",
-    message: "Hi Rohan",
-  },
-  {
-    username: "shehar",
-    message: "Hi Shehar",
-  },
-  {
-    username: "Jai",
-    message: "Hi Jai",
-  },
-];
+const chatList = [];
 
-function ChatMsgUI({ username }) {
+function ChatMsgUI(props) {
   const [msg, setMsg] = useState("");
   const [chats, setChats] = useState(chatList);
 
   // Todo: Username from the Login Page
-  const propsUsername = username;
+  const currentUser = props.username;
 
   async function handleSubmit() {
     const { error } = await supabase.from("user_messages").insert({
-      username: `${propsUsername}`,
+      username: `${currentUser}`,
       message: `${msg}`,
     });
+    setMsg("");
   }
+
+  const handleKeyDown = (event) => {
+    if (event.key === "Enter") {
+      handleSubmit();
+    }
+  };
 
   useEffect(() => {
     // Todo: Subscribe to updates from the  user_messages table
@@ -49,8 +43,6 @@ function ChatMsgUI({ username }) {
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "user_messages" },
         (payload) => {
-          console.log(JSON.stringify(payload.new.username, undefined, 4));
-          console.log(JSON.stringify(payload.new.message, undefined, 4));
           setChats([
             ...chats,
             {
@@ -68,23 +60,30 @@ function ChatMsgUI({ username }) {
     };
   });
 
+  var classStr = "min-w-fit m-2 text-white rounded-xl";
+
   return (
     <div className="flex flex-col justify-center m-10">
-      <>
+      <div className="m-2 p-2 flex flex-col">
         {chats.map((value, index) => {
           return (
             <div
               key={index}
-              className=" flex flex-col m-2 bg-orange-500 text-white rounded-xl max-w-md "
+              className={
+                value.username === currentUser
+                  ? classStr + " self-end bg-green-500"
+                  : classStr + " self-start bg-orange-500"
+              }
             >
-              <span className="p-2 text-black">
-                Username : {value.username}
+              <span className="p-2 font-sans italic text-black">
+                {value.username}
               </span>
-              <p className="text-center">Message : {value.message}</p>
+              <p className=" p-2 text-center">Message : {value.message}</p>
             </div>
           );
         })}
-      </>
+        {/* min-w-fit self-start m-2 bg-orange-500 text-white rounded-xl */}
+      </div>
       <div className="flex justify-center m-5">
         <input
           type="text"
@@ -92,6 +91,7 @@ function ChatMsgUI({ username }) {
           className="bg-gray-200 w-1/3 text-gray-800 rounded-lg focus:outline-none focus:ring focus:border-blue-300 p-3 m-5 text-center"
           value={msg}
           onChange={(e) => setMsg(e.target.value)}
+          onKeyDown={handleKeyDown}
         />
         <button
           onClick={handleSubmit}
