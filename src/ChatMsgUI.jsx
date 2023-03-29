@@ -43,6 +43,7 @@ function ChatMsgUI(props) {
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "user_messages" },
         (payload) => {
+          console.log(payload);
           setChats([
             ...chats,
             {
