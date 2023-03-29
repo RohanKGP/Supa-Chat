@@ -10,20 +10,80 @@ const VITE_SUPABASE_URL = "https://xpnmkgqflujrxokagctc.supabase.co";
 
 const supabase = createClient(VITE_SUPABASE_URL, VITE_SUPABASE_KEY);
 
-const chatList = [];
+var channel;
+
+async function sendToDb(data) {
+  const { error } = await supabase.from("user_messages").insert({
+    username: `${data.user}`,
+    message: `${data.msg}`,
+  });
+  if (error) {
+    console.log(error);
+    return;
+  }
+}
 
 function ChatMsgUI(props) {
+  useEffect(() => {
+    // Todo: Subscribe to updates from the  user_messages table
+    channel = supabase.channel(`room-${props.room}`, {
+      config: {
+        broadcast: {
+          self: true,
+        },
+      },
+    });
+
+    channel.subscribe((status, err) => {
+      if (err) console.log(err);
+      console.log(`Status : ${status}`);
+
+      if (status === "SUBSCRIBED") {
+        console.log("channel subscribed!");
+      }
+    });
+
+    channel.on(
+      "broadcast",
+      {
+        event: "sending messages",
+      },
+      (payload) => {
+        setChats((prevChat) => {
+          if (!prevChat) prevChat = [];
+
+          return [
+            ...prevChat,
+            {
+              username: `${payload.payload.username}`,
+              message: `${payload.payload.message}`,
+            },
+          ];
+        });
+      }
+    );
+  }, []);
+
   const [msg, setMsg] = useState("");
-  const [chats, setChats] = useState(chatList);
+  const [chats, setChats] = useState([{}]);
 
   // Todo: Username from the Login Page
   const currentUser = props.username;
 
-  async function handleSubmit() {
-    const { error } = await supabase.from("user_messages").insert({
-      username: `${currentUser}`,
-      message: `${msg}`,
-    });
+  function handleSubmit() {
+    sendToDb({ user: currentUser, msg: msg });
+    // send message to channel
+    if (channel !== undefined || channel !== null) {
+      channel.send({
+        type: "broadcast",
+        event: "sending messages",
+        payload: {
+          username: `${currentUser}`,
+          message: `${msg}`,
+        },
+      });
+    }
+
     setMsg("");
   }
 
@@ -33,47 +93,26 @@ function ChatMsgUI(props) {
     }
   };
 
-  useEffect(() => {
-    // Todo: Subscribe to updates from the  user_messages table
-
-    const channel = supabase.channel("any");
-
-    channel
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "user_messages" },
-        (payload) => {
-          console.log(payload);
-          setChats([
-            ...chats,
-            {
-              username: `${payload.new.username}`,
-              message: `${payload.new.message}`,
-            },
-          ]);
-        }
-      )
-      .subscribe();
-
-    return () => {
-      // Unsubscribe from real-time updates when the component unmounts
-      channel.unsubscribe();
-    };
-  });
-
   var classStr = "min-w-fit m-2 text-white rounded-xl";
 
   return (
-    <div className="flex flex-col justify-center m-10">
-      <div className="m-2 p-2 flex flex-col">
+    <div className="flex flex-col h-screen">
+      <div className="p-2 h-[90%] flex flex-col overflow-auto">
         {chats.map((value, index) => {
+          if (
+            value.message === "" ||
+            value.message === undefined ||
+            value.message === null
+          )
+            return;
+
           return (
             <div
               key={index}
               className={
                 value.username === currentUser
                   ? classStr + " self-end bg-green-500"
-                  : classStr + " self-start bg-orange-500"
+                  : classStr + " self-start bg-blue-400"
               }
             >
               <span className="p-2 font-sans italic text-black">
@@ -83,9 +122,8 @@ function ChatMsgUI(props) {
             </div>
           );
         })}
-        {/* min-w-fit self-start m-2 bg-orange-500 text-white rounded-xl */}
       </div>
-      <div className="flex justify-center m-5">
+      <div className="flex flex-row justify-center w-screen min-h-[10%] bottom-0">
         <input
           type="text"
           placeholder="Type your message here"
